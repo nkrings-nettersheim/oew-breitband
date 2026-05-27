@@ -36,12 +36,12 @@ def main():
     #eAkz_dictionary = {eintrag["aktenzeichen"]: eintrag for eintrag in eAkz["eintraege"]}
 
     # Aufruf Projektmasterdatei einzulesen und auszuwerten
-    #alle_ergebnisse = projektmaster_einlesen(input_dir, data)
+    alle_ergebnisse = projektmaster_einlesen(input_dir, data)
 
     # Ergebnisse in die Statusdatei schreiben
-    #statusdatei = status_excel_erstellen(data, alle_ergebnisse)
+    statusdatei = status_excel_erstellen(data, alle_ergebnisse)
 
-    adressen_auswerten(input_dir, data)
+    adressen_auswerten(input_dir, data, statusdatei)
 
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Ende der Verarbeitung")
@@ -144,7 +144,8 @@ def projektmaster_details(df, alle_ergebnisse):
 
 def status_excel_erstellen(data, alle_ergebnisse):
 
-    gesamt_df = pd.DataFrame(alle_ergebnisse)
+    df = pd.DataFrame(alle_ergebnisse)
+    gesamt_df = df.drop_duplicates(subset=['eAktenzeichen', 'Gemeinde', 'Gemarkung'])
 
     template = home + "/" + data['output_dir'] + data['status_template']  #Status_Template
     sheet = "Master"
@@ -194,38 +195,36 @@ def status_excel_erstellen(data, alle_ergebnisse):
     return ausgabe
 
 
-def adressen_auswerten(input_dir, data):
-    STATUS_DATEI = input_dir + data['status_datei'] # gefüllte "AP24_Master_Status..."
-    STATUS_SHEET = "Status"
+def adressen_auswerten(input_dir, data, statusdatei):
+    STATUS_DATEI = statusdatei # gefüllte "AP24_Master_Status..."
+    STATUS_SHEET = "Master"
     QUELL_SHEET = "Adressliste_zur Bearbeitung_int" #Excelsheet, welches ausgewertet wird
-    START_ROW = 3
+    START_ROW = 5
 
-    ADRESSEN_BASIS_COL = 6
-    ADRESSEN_HINZUNAHME_COL = 7
-    ADRESSEN_ENTFERNEN_COL = 8
-    ADRESSEN_IN_BEARBEITUNG = 9
-    ADRESSEN_AKTUELL = 10
+    ADRESSEN_BASIS_COL = 15
+    ADRESSEN_HINZUNAHME_COL = 16
+    ADRESSEN_ENTFERNEN_COL = 17
+    ADRESSEN_IN_BEARBEITUNG = 18
+    ADRESSEN_AKTUELL = 19
 
     GU = 11 # Spalte K - Hier kommt der GÜ/GU rein
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Start Auswertung der Adressdaten je Landkreis")
 
-    #print(df.head())
-
     # Dynamischer Suchwert kommt aus Spalte J der Basis → sucht in dieser Quellspalte
     SUCH_SPALTE_QUELLE = "ortsname"  # Spaltenname in der Quelldatei Spalte CH
 
-    def adressen_basis_treffer(suchwert, eaktz, df):
+    def adressen_basis_treffer(gemeinde, gemarkung, eaktz, df):
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
+            "gemark_nam": gemarkung,
             "hgf_aktenzeichnen_quelle" : eaktz,
-            "hgf_untervers": "1",
+            "hgf_untervers": 1,
             # weitere Kriterien einfach ergänzen...
         }
-
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
         #if suchwert == "ADK_S_02-":
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == suchwert]
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
         #gefiltert = df[df[SUCH_SPALTE_QUELLE].astype(str).str.startswith(str(suchwert))]
 
         for spalte, wert in fixe_kriterien.items():
@@ -233,57 +232,82 @@ def adressen_auswerten(input_dir, data):
                 gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte] != "")]
             else:
                 gefiltert = gefiltert[gefiltert[spalte] == wert]
+        wert_hgf = len(gefiltert)
 
-        #gefiltert = df[df[SUCH_SPALTE_QUELLE].astype(str).str.startswith(str(suchwert))]
-        #anzahl = len(gefiltert)
-        #print(anzahl)
-        return len(gefiltert)
+        if gemarkung == "Besenfeld":
+            print('Hallo')
 
-    def adressen_hinzunahme(suchwert, eaktz,  df):
+        fixe_kriterien = {
+            "gemark_nam": gemarkung,
+            "dgf_aktenzeichnen_quelle": eaktz,
+            "dgf_untervers": 1,
+            # weitere Kriterien einfach ergänzen...
+        }
+
+        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
+        # if suchwert == "ADK_S_02-":
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
+        # gefiltert = df[df[SUCH_SPALTE_QUELLE].astype(str).str.startswith(str(suchwert))]
+
+        for spalte, wert in fixe_kriterien.items():
+            if wert == "NICHT_LEER":
+                gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte] != "")]
+            else:
+                gefiltert = gefiltert[gefiltert[spalte] == wert]
+        wert_dgf = len(gefiltert)
+
+        basis_wert = wert_hgf + wert_dgf
+        return basis_wert
+
+    def adressen_hinzunahme(gemeinde, gemarkung, eaktz,  df):
 
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
+            "gemark_nam": gemarkung,
             "foerderazbnd": eaktz,
             "status_wechsel_pt": "In Antrag hinzunehmen",  # Spaltenname in Quelldatei : gesuchter Wert Förderverfahrenszuordnung
             # weitere Kriterien einfach ergänzen...
         }
 
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == suchwert]
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
            gefiltert = gefiltert[gefiltert[spalte] == wert]
 
         return len(gefiltert)
 
-    def adressen_entfernen(suchwert, eaktz, df):
+    def adressen_entfernen(gemeinde, gemarkung, eaktz, df):
 
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
+            "gemark_nam": gemarkung,
             "foerderazbnd": eaktz,
             "status_wechsel_pt": "Aus Antrag entfernen",
             # Spaltenname in Quelldatei : gesuchter Wert Förderverfahrenszuordnung
             # weitere Kriterien einfach ergänzen...
         }
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == suchwert]
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
             gefiltert = gefiltert[gefiltert[spalte] == wert]
 
         return len(gefiltert)
 
-    def adressen_in_bearbeitung(suchwert, eaktz, df):
+    def adressen_in_bearbeitung(gemeinde, gemarkung, eaktz, df):
 
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
-            "status_wechsel_pt": ["in Bearbeitung", "Angezeigt bei PT", "Bescheid liegt vor"],  # Spaltenname in Quelldatei : gesuchter Wert Förderverfahrenszuordnung
+            "gemark_nam": gemarkung,
+            #"status_wechsel_pt": ["in Bearbeitung", "Angezeigt bei PT", "Bescheid liegt vor"],  # Spaltenname in Quelldatei : gesuchter Wert Förderverfahrenszuordnung
+            "status_wechsel_pt": "in Bearbeitung",
             "foerderazbnd": eaktz,
             # weitere Kriterien einfach ergänzen...
         }
 
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == suchwert]
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
             if wert == "NICHT_LEER":
@@ -295,16 +319,17 @@ def adressen_auswerten(input_dir, data):
 
         return len(gefiltert)
 
-    def adressen_aktuell(suchwert, eaktz, df):
+    def adressen_aktuell(gemeinde, gemarkung, eaktz, df):
 
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
+            "gemark_nam": gemarkung,
             "status_wechsel_pt": "LEER",
             "foerderazbnd": eaktz,
         }
 
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == suchwert]
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
             if wert == "NICHT_LEER":
@@ -319,7 +344,7 @@ def adressen_auswerten(input_dir, data):
 
     # Basis-Excel laden
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
-    print(datum + ": Statusdatei : " + STATUS_DATEI + " wird geladen")
+    print(datum + ": Statusdatei: " + STATUS_DATEI + " wird geladen")
     wb = load_workbook(STATUS_DATEI)
     ws = wb[STATUS_SHEET]
     if data['Prod'] == "j":
@@ -332,34 +357,36 @@ def adressen_auswerten(input_dir, data):
                           ]
     else:
         #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["ADK_ADRESS_MASTER"]]
-        address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["LBC_ADRESS_MASTER"]]
+        #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["LBC_ADRESS_MASTER"]]
+        address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["FDS_ADRESS_MASTER"]]
+
 
     for quell_datei in address_master:
         datum = datetime.today().strftime("%Y%m%d %H%M%S")
         print(datum + ": Adressdatei: " + quell_datei + " gestartet")
 
-        df = pd.read_excel(quell_datei, sheet_name=QUELL_SHEET, header=11)
+        df = pd.read_excel(quell_datei, sheet_name=QUELL_SHEET, header=14)
         #print(df.head())
 
         for row_idx in range(START_ROW, ws.max_row + 1):
-            suchwert = ws.cell(row=row_idx, column=4).value # 4 = Ort; 5 = Gemeindeschlüssel
+            #suchwert = ws.cell(row=row_idx, column=4).value
+            gemeinde = ws.cell(row=row_idx, column=4).value
+            gemarkung = ws.cell(row=row_idx, column=5).value
             eaktz = ws.cell(row=row_idx, column=2).value
 
-            if suchwert is None or str(suchwert).strip() == "":
+            if gemeinde is None or str(gemeinde).strip() == "":
                 continue
             #print(suchwert)
-            anzahl_basis_value = adressen_basis_treffer(suchwert, eaktz, df)
-            anzahl_hinzunahme_value = adressen_hinzunahme(suchwert, eaktz, df)
-            anzahl_entfernen_value = adressen_entfernen(suchwert, eaktz, df)
-            anzahl_in_bearbeitung_value = adressen_in_bearbeitung(suchwert, eaktz, df)
-            anzahl_aktuell_value = adressen_aktuell(suchwert, eaktz, df)
-            #anzahl_fm_aus_antrag_entfernen = adressen_fm_aus_antrag_entfernen(suchwert, df)
-            #anzahl_fm_in_antrag_hinzunehmen = adressen_fm_in_antrag_hinzunehmen(suchwert, df)
+            anzahl_basis_value = adressen_basis_treffer(gemeinde, gemarkung, eaktz, df)
+            anzahl_hinzunahme_value = adressen_hinzunahme(gemeinde, gemarkung, eaktz, df)
+            anzahl_entfernen_value = adressen_entfernen(gemeinde, gemarkung,  eaktz, df)
+            anzahl_in_bearbeitung_value = adressen_in_bearbeitung(gemeinde, gemarkung,  eaktz, df)
+            anzahl_aktuell_value = adressen_aktuell(gemeinde, gemarkung, eaktz, df)
+
             #anzahl_aktuell_value = anzahl_basis_value - anzahl_fm_aus_antrag_entfernen + anzahl_fm_in_antrag_hinzunehmen
             #gu_wert = ws.cell(row=row_idx, column=GU).value
             #print(f"{anzahl_aktuell_value} und {anzahl_basis_value} und {anzahl_fm_aus_antrag_entfernen} und {anzahl_fm_in_antrag_hinzunehmen}")
             if anzahl_basis_value != 0:
-                anzahl_basis_value = anzahl_basis_value - anzahl_hinzunahme_value
                 ws.cell(row=row_idx, column=ADRESSEN_BASIS_COL, value=anzahl_basis_value)
             if anzahl_hinzunahme_value != 0:
                 ws.cell(row=row_idx, column=ADRESSEN_HINZUNAHME_COL, value=anzahl_hinzunahme_value)
@@ -369,12 +396,10 @@ def adressen_auswerten(input_dir, data):
                 ws.cell(row=row_idx, column=ADRESSEN_IN_BEARBEITUNG, value=anzahl_in_bearbeitung_value)
             if anzahl_aktuell_value != 0:
                 ws.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=anzahl_aktuell_value)
-            #if anzahl_aktuell_value != 0:
-            #    ws.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=anzahl_aktuell_value)
 
-    datum = datetime.today().strftime("%Y%m%d")
-    ausgabe = home + "/" + data['output_dir'] + f"Statusliste_V1_{datum}.xlsx"
-    wb.save(ausgabe)
+    #datum = datetime.today().strftime("%Y%m%d")
+    #ausgabe = home + "/" + data['output_dir'] + f"Statusliste_V1_{datum}.xlsx"
+    wb.save(STATUS_DATEI)
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Adressmaster-Daten verarbeitet")
 

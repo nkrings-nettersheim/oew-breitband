@@ -1,9 +1,8 @@
 {
-  "Prod" : "n",
+  "Prod" : "j",
   "input_dir" : "00_oew_ablage/",
   "output_dir" : "00_oew_ablage/",
   "status_template" : "AP24_Master_Status_Template.xlsx",
-  "status_datei" : "Statusliste_V1.xlsx",
   "ADK_Header" : 13,
   "LBC_Header" : 60,
   "FDS_Header" : 23,
