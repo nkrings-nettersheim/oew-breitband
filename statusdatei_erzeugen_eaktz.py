@@ -231,11 +231,13 @@ def adressen_auswerten(input_dir, data, statusdatei):
             if wert == "NICHT_LEER":
                 gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte] != "")]
             else:
+                if spalte == "hgf_untervers":
+                    gefiltert[spalte] = pd.to_numeric(gefiltert[spalte], errors='coerce')
                 gefiltert = gefiltert[gefiltert[spalte] == wert]
         wert_hgf = len(gefiltert)
 
-        if gemarkung == "Besenfeld":
-            print('Hallo')
+        #if gemarkung == "Berghülen":
+        #    print('Hallo')
 
         fixe_kriterien = {
             "gemark_nam": gemarkung,
@@ -253,6 +255,8 @@ def adressen_auswerten(input_dir, data, statusdatei):
             if wert == "NICHT_LEER":
                 gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte] != "")]
             else:
+                if spalte == "dgf_untervers":
+                    gefiltert[spalte] = pd.to_numeric(gefiltert[spalte], errors='coerce')
                 gefiltert = gefiltert[gefiltert[spalte] == wert]
         wert_dgf = len(gefiltert)
 
@@ -356,9 +360,9 @@ def adressen_auswerten(input_dir, data, statusdatei):
                           home + "/" + data["input_dir"] + data["adressablage"] + data["ZAK_ADRESS_MASTER"]
                           ]
     else:
-        #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["ADK_ADRESS_MASTER"]]
+        address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["ADK_ADRESS_MASTER"]]
         #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["LBC_ADRESS_MASTER"]]
-        address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["FDS_ADRESS_MASTER"]]
+        #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["FDS_ADRESS_MASTER"]]
 
 
     for quell_datei in address_master:
