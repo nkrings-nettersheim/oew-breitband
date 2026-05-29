@@ -1,0 +1,72 @@
+# =========================
+# PyCharm / IDE
+# =========================
+.idea/
+*.iml
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+
+# =========================
+# Virtuelle Umgebung
+# =========================
+venv/
+.env/
+.venv/
+env/
+
+# =========================
+# Environment Variablen
+# =========================
+.env
+.env.*
+
+# =========================
+# Logs & temporäre Dateien
+# =========================
+*.log
+*.tmp
+*.bak
+
+# =========================
+# OS-spezifisch
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Test / Coverage
+# =========================
+.pytest_cache/
+.coverage
+coverage.xml
+
+# =========================
+# Jupyter Notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Lokale Konfigurationen
+# =========================
+config.local.json
+*.local.json
+settings.local.yaml
+config.json
+
+# =========================
+# Daten / sensible Dateien
+# =========================
+*.sqlite3
+*.db
+secrets.json
+``
