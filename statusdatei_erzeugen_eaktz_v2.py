@@ -14,8 +14,6 @@ home = os.path.expanduser('~')
 
 def main():
 
-    #home = os.path.expanduser('~')
-
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
 
     print(datum + ": Start der Verarbeitung")
@@ -26,14 +24,7 @@ def main():
     f = open(my_dir / 'config.json')
     data = json.load(f)
     input_dir = home + "/" + data['input_dir']
-    output_dir = home + "/" + data['output_dir']
     f.close()
-
-    # Liste der eAkz einlesen
-    #f = open(my_dir / 'eAktenzeichen.json')
-    #eAkz = json.load(f)
-    #f.close()
-    #eAkz_dictionary = {eintrag["aktenzeichen"]: eintrag for eintrag in eAkz["eintraege"]}
 
     # Aufruf Projektmasterdatei einzulesen und auszuwerten
     alle_ergebnisse = projektmaster_einlesen(input_dir, data)
@@ -54,7 +45,6 @@ def projektmaster_einlesen(inputdir, data):
 
     #Landkreis ADK einlesen
     df = pd.read_excel(pm_datei, sheet_name="Planungs und Bauabrufe ADK", header=data['ADK_Header'])
-    #print(df.head())
     alle_ergebnisse = projektmaster_details(df, alle_ergebnisse)
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": PM-Daten ADK eingelesen")
@@ -98,15 +88,14 @@ def projektmaster_details(df, alle_ergebnisse):
     # Name der ersten Spalte ermitteln
     erste_spalte = df.columns[0]
     sechste_spalte = df.columns[5]
-    # Hier sammeln wir die Treffer
 
+    # Hier sammeln wir die Treffer
     for index, row in df.iterrows():
 
         wert_a = row[erste_spalte]
         wert_gemeinde = str(row[sechste_spalte])
 
         # Zeilen die mit "Alle" in der Spalte Gemeinde beginnen überspringen
-        # Zeilen werden doch benötigt, da die Controlling-Liste sie enthält
         if wert_gemeinde.startswith("alle"):
             continue
 
@@ -119,7 +108,6 @@ def projektmaster_details(df, alle_ergebnisse):
 
         # Abbruchbedingung
         if wert_a.lower() == "möglicher status:":
-            #print("Ende erreicht")
             break
 
         # Relevante Zeile speichern
@@ -136,7 +124,6 @@ def projektmaster_details(df, alle_ergebnisse):
             "Planung Ende": row.iloc[20],
             "Bauphase Beginn": row.iloc[24],
             "Bauphase Ende": row.iloc[25],
-
         })
 
     return alle_ergebnisse
@@ -149,12 +136,12 @@ def status_excel_erstellen(data, alle_ergebnisse):
     # Duplicate entfernen die aufgrund mehrerer Baucluster entstehen
     gesamt_df = df.drop_duplicates(subset=['eAktenzeichen', 'Gemeinde', 'Gemarkung'])
 
-    # Sortieren der DAten nach Landkreis, Ausschreibung, Gemeinde und Gemarkung
+    # Sortieren der Daten nach Landkreis, Ausschreibung, Gemeinde und Gemarkung
     gesamt_df = gesamt_df.sort_values(by=['Landkreis','Ausschreibung' ,'Gemeinde', 'Gemarkung'])
 
+    # Pfad und Dateiname definieren für die Ausgabe
     template = home + "/" + data['output_dir'] + data['status_template']  #Status_Template
     sheet = "Master"
-
     datum = datetime.today().strftime("%Y%m%d")
     ausgabe = home + "/" + data['output_dir'] + f"AP24_Master_Status_{datum}.xlsx"
 
@@ -172,7 +159,6 @@ def status_excel_erstellen(data, alle_ergebnisse):
         "Planung Ende": 12,
         "Bauphase Beginn": 13,
         "Bauphase Ende": 14,
-
     }
 
     # Existierende Datei laden (Formatierung & Formeln bleiben erhalten)
@@ -181,6 +167,7 @@ def status_excel_erstellen(data, alle_ergebnisse):
 
     START_ROW = 5  # Zeile, ab der Daten geschrieben werden (1 = erste Zeile)
 
+    # Datumssplaten formatieren
     for df_col, excel_col in column_mapping.items():
         for row_idx, value in enumerate(gesamt_df[df_col], start=START_ROW):
             cell = ws.cell(row=row_idx, column=excel_col, value=value)
@@ -188,9 +175,11 @@ def status_excel_erstellen(data, alle_ergebnisse):
             if df_col in ["Planung Beginn", "Planung Ende", "Bauphase Beginn", "Bauphase Ende"]:
                 cell.number_format = "DD.MM.YYYY"
 
-    end_row = START_ROW + len(gesamt_df) - 1
+    END_ROW = START_ROW + len(gesamt_df) - 1
 
-    for row_idx in range(START_ROW, end_row + 1):
+    # In Spalte 6 einen SVERWEIS einbauen
+    # Dieser schaut in einer Referenztabelle nach, da die Info in dem Block der Daten der PMD nicht enthalten ist
+    for row_idx in range(START_ROW, END_ROW + 1):
         ws.cell(row=row_idx, column=6, value=f'=VLOOKUP(B{row_idx},Daten!Z$1:AA$57,2,)') # Formel muss in Englisch angegeben werden
 
     wb.save(ausgabe)
@@ -212,21 +201,23 @@ def adressen_auswerten(input_dir, data, statusdatei):
     ADRESSEN_IN_BEARBEITUNG = 18
     ADRESSEN_AKTUELL = 19
 
-    GU = 11 # Spalte K - Hier kommt der GÜ/GU rein
+    #GU = 11 # Spalte K - Hier kommt der GÜ/GU rein
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Start Auswertung der Adressdaten je Landkreis")
 
-    # Dynamischer Suchwert kommt aus Spalte J der Basis → sucht in dieser Quellspalte
-    SUCH_SPALTE_QUELLE = "ortsname"  # Spaltenname in der Quelldatei Spalte CH
+    # Erstes Kriterium, nachdem die Masterdatei gefiltert wird
+    SUCH_SPALTE_QUELLE = "ortsname"
 
     def adressen_basis_treffer(gemeinde, gemarkung, eaktz, df):
-        # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
+        # hgf Abschnitt
+        # weitere Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
             "gemark_nam": gemarkung,
             "hgf_aktenzeichnen_quelle" : eaktz,
             "hgf_untervers": 1,
         }
-        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
+
+        # Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück.
         gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
@@ -241,13 +232,14 @@ def adressen_auswerten(input_dir, data, statusdatei):
         #if gemarkung == "Berghülen":
         #    print('Hallo')
 
+        # dgf Abschnitt
         fixe_kriterien = {
             "gemark_nam": gemarkung,
             "dgf_aktenzeichnen_quelle": eaktz,
             "dgf_untervers": 1,
         }
 
-        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
+        # Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück.
         gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
@@ -262,84 +254,45 @@ def adressen_auswerten(input_dir, data, statusdatei):
         basis_wert = wert_hgf + wert_dgf
         return basis_wert
 
-    def adressen_hinzunahme(gemeinde, gemarkung, eaktz,  df):
+    def adressen_detail(gemeinde, gemarkung, eaktz, status_wechsel_pt, df):
 
-        # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
-        fixe_kriterien = {
-            "gemark_nam": gemarkung,
-            "foerderazbnd": eaktz,
-            "status_wechsel_pt": "In Antrag hinzunehmen",
-        }
+        STATUS_WECHSEL_PT = ['In Bearbeitung FM', 'In Bearbeitung PT','Angenommen', 'Abgelehnt']
+        AENDERUNG_PT = ['Entnahme -> EWA',
+                        'Entnahme -> nicht förderfähig',
+                        'Entnahme -> Mini - MEV',
+                        'Entnahme -> HFC - Nachschärfung',
+                        'Entnahme -> sonstiges',
+                        'Hinzunahme -> Mini - MEV',
+                        'Hinzunahme -> Neue Adresse',
+                        'Hinzunahme -> HFC - Nachschärfung',
+                        'Hinzunahme -> sonstiges'
+                        'Andere Gründe']
 
-        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
+        result = []
 
-        for spalte, wert in fixe_kriterien.items():
-           gefiltert = gefiltert[gefiltert[spalte] == wert]
+        for status_wechsel_pt in STATUS_WECHSEL_PT:
+            for anderung_pt in AENDERUNG_PT:
+                # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
+                fixe_kriterien = {
+                    "gemark_nam": gemarkung,
+                    "foerderazbnd": eaktz,
+                    "status_wechsel_pt_neu": status_wechsel_pt,
+                    "aenderung_pt": anderung_pt,
+                }
 
-        return len(gefiltert)
+                """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
+                gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
-    def adressen_entfernen(gemeinde, gemarkung, eaktz, df):
+                for spalte, wert in fixe_kriterien.items():
+                    if wert == "NICHT_LEER":
+                        gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte].astype(str).str.strip() != "")]
+                    elif wert == "LEER":
+                        gefiltert = gefiltert[gefiltert[spalte].isna() | (gefiltert[spalte].astype(str).str.strip() == "")]
+                    else:
+                        gefiltert = gefiltert[gefiltert[spalte] == wert]
+                    result.append((status_wechsel_pt, anderung_pt, len(gefiltert)))
 
-        # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
-        fixe_kriterien = {
-            "gemark_nam": gemarkung,
-            "foerderazbnd": eaktz,
-            "status_wechsel_pt": "Aus Antrag entfernen",
-        }
-
-        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
-
-        for spalte, wert in fixe_kriterien.items():
-            gefiltert = gefiltert[gefiltert[spalte] == wert]
-
-        return len(gefiltert)
-
-    def adressen_in_bearbeitung(gemeinde, gemarkung, eaktz, df):
-
-        # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
-        fixe_kriterien = {
-            "gemark_nam": gemarkung,
-            "status_wechsel_pt": "in Bearbeitung",
-            "foerderazbnd": eaktz,
-        }
-
-        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
-
-        for spalte, wert in fixe_kriterien.items():
-            if wert == "NICHT_LEER":
-                gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte].astype(str).str.strip() != "")]
-            elif isinstance(wert, list):
-                gefiltert = gefiltert[gefiltert[spalte].isin(wert)]  # ← mehrere Werte
-            else:
-                gefiltert = gefiltert[gefiltert[spalte] == wert]
-
-        return len(gefiltert)
-
-    def adressen_aktuell(gemeinde, gemarkung, eaktz, df):
-
-        # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
-        fixe_kriterien = {
-            "gemark_nam": gemarkung,
-            "status_wechsel_pt": "LEER",
-            "foerderazbnd": eaktz,
-        }
-
-        """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
-        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
-
-        for spalte, wert in fixe_kriterien.items():
-            if wert == "NICHT_LEER":
-                gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte].astype(str).str.strip() != "")]
-            elif wert == "LEER":
-                gefiltert = gefiltert[gefiltert[spalte].isna() | (gefiltert[spalte].astype(str).str.strip() == "")]
-            else:
-                gefiltert = gefiltert[gefiltert[spalte] == wert]
-
-        return len(gefiltert)
-
+        return result
 
     # Basis-Excel laden
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
@@ -370,15 +323,16 @@ def adressen_auswerten(input_dir, data, statusdatei):
             gemeinde = ws.cell(row=row_idx, column=4).value
             gemarkung = ws.cell(row=row_idx, column=5).value
             eaktz = ws.cell(row=row_idx, column=2).value
+     #hier den Landkreis auswerten und unten mit übergeben als Filter
 
             if gemeinde is None or str(gemeinde).strip() == "":
                 continue
 
             anzahl_basis_value = adressen_basis_treffer(gemeinde, gemarkung, eaktz, df)
-            anzahl_hinzunahme_value = adressen_hinzunahme(gemeinde, gemarkung, eaktz, df)
-            anzahl_entfernen_value = adressen_entfernen(gemeinde, gemarkung,  eaktz, df)
-            anzahl_in_bearbeitung_value = adressen_in_bearbeitung(gemeinde, gemarkung,  eaktz, df)
-            anzahl_aktuell_value = adressen_aktuell(gemeinde, gemarkung, eaktz, df)
+            anzahl_hinzunahme_value = adressen_detail(gemeinde, gemarkung, eaktz, "In Antrag hinzunehmen", df)
+            anzahl_entfernen_value = adressen_detail(gemeinde, gemarkung,  eaktz, "Aus Antrag entfernen", df)
+            anzahl_in_bearbeitung_value = adressen_detail(gemeinde, gemarkung, eaktz, "in Bearbeitung", df)
+            anzahl_aktuell_value = adressen_detail(gemeinde, gemarkung, eaktz, "LEER", df)
 
             if anzahl_basis_value != 0:
                 ws.cell(row=row_idx, column=ADRESSEN_BASIS_COL, value=anzahl_basis_value)
