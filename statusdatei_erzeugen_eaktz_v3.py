@@ -1,5 +1,7 @@
 import json
 import os
+import sys
+
 import pandas as pd
 import warnings
 
@@ -12,7 +14,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 home = os.path.expanduser('~')
 
-def main():
+def main(prod):
 
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
 
@@ -23,7 +25,7 @@ def main():
     # Konfiguration einlesen
     f = open(my_dir / 'config_v2.json')
     data = json.load(f)
-    #input_dir = home + "/" + data['input_dir']
+    data['Prod']=prod
     f.close()
 
     # Aufruf Projektmasterdatei einzulesen und auszuwerten
@@ -32,7 +34,7 @@ def main():
     # Ergebnisse in die Statusdatei schreiben
     #statusdatei = status_excel_erstellen(data, alle_ergebnisse)
 
-    statusdatei = home + "/" + data['output_dir'] + + f"AP24_Master_Status_V2.xlsx"
+    statusdatei = home + "/" + data['output_dir'] + f"AP24_Master_Status_V2.xlsx"
 
     adressen_auswerten(data, statusdatei)
 
@@ -212,6 +214,7 @@ def adressen_auswerten(data, statusdatei):
     QUELL_SHEET = data["Quellsheet_Adressmaster"] #Excelsheet, welches ausgewertet wird
     START_ROW = 5
 
+    ADRESSEN_GESAMT_COL = 13
     ADRESSEN_BASIS_COL = 14
     ADRESSEN_ENTNAHME = 15
     ADRESSEN_HINZUNAHME = 16
@@ -220,20 +223,65 @@ def adressen_auswerten(data, statusdatei):
     ADRESSEN_ANGENOMMEN = 19
     ADRESSEN_ABGELEHNT = 20
     ADRESSEN_AKTUELL = 21
+    ADRESSEN_Y_COL = 22
+    ADRESSEN_X_COL = 23
 
-    #GU = 11 # Spalte K - Hier kommt der GÜ/GU rein
+
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Start Auswertung der Adressdaten je Landkreis")
 
     # Erstes Kriterium, nachdem die Masterdatei gefiltert wird
     SUCH_SPALTE_QUELLE = "ortsname"
 
-    def adressen_basis_treffer(gemeinde, gemarkung, eaktz, df):
-        # hgf Abschnitt
-        # weitere Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
+    def adressen_gesamt(gemeinde, gemarkung, eaktz, bc_code, df):
+
         fixe_kriterien = {
             "gemark_nam": gemarkung,
             "hgf_aktenzeichnen_quelle" : eaktz,
+            "bauabschnitt_code": bc_code,
+        }
+
+        # Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück.
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
+        #if gemarkung == "Ehlenbogen":
+        #    print("Hallo")
+        for spalte, wert in fixe_kriterien.items():
+            if wert == "":
+                gefiltert = gefiltert[gefiltert[spalte].isna()]
+            else:
+                gefiltert = gefiltert[gefiltert[spalte] == wert]
+        wert_hgf = len(gefiltert)
+
+        fixe_kriterien = {
+            "gemark_nam": gemarkung,
+            "dgf_aktenzeichnen_quelle": eaktz,
+            "bauabschnitt_code": bc_code,
+        }
+
+        # Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück.
+        gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
+        # if gemarkung == "Ehlenbogen":
+        #    print("Hallo")
+        for spalte, wert in fixe_kriterien.items():
+            if wert == "":
+                gefiltert = gefiltert[gefiltert[spalte].isna()]
+            else:
+                gefiltert = gefiltert[gefiltert[spalte] == wert]
+        wert_dgf = len(gefiltert)
+
+        basis_wert = wert_hgf + wert_dgf
+        return basis_wert
+
+    def adressen_basis_treffer(gemeinde, gemarkung, eaktz, bc_code, df):
+        # hgf Abschnitt
+        # weitere Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
+        #if gemarkung == "Aach":
+        #    print('Hallo')
+
+        fixe_kriterien = {
+            "gemark_nam": gemarkung,
+            "hgf_aktenzeichnen_quelle" : eaktz,
+            "bauabschnitt_code": bc_code,
             "hgf_untervers": 1,
         }
 
@@ -243,6 +291,10 @@ def adressen_auswerten(data, statusdatei):
         for spalte, wert in fixe_kriterien.items():
             if wert == "NICHT_LEER":
                 gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte] != "")]
+            elif wert == "LEER":
+                gefiltert = gefiltert[gefiltert[spalte].isna() | (gefiltert[spalte].astype(str).str.strip() == "")]
+            elif wert == "":
+                gefiltert = gefiltert[gefiltert[spalte].isna()]
             else:
                 if spalte == "hgf_untervers":
                     gefiltert[spalte] = pd.to_numeric(gefiltert[spalte], errors='coerce')
@@ -256,6 +308,7 @@ def adressen_auswerten(data, statusdatei):
         fixe_kriterien = {
             "gemark_nam": gemarkung,
             "dgf_aktenzeichnen_quelle": eaktz,
+            "bauabschnitt_code": bc_code,
             "dgf_untervers": 1,
         }
 
@@ -265,6 +318,8 @@ def adressen_auswerten(data, statusdatei):
         for spalte, wert in fixe_kriterien.items():
             if wert == "NICHT_LEER":
                 gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte] != "")]
+            elif wert == "":
+                gefiltert = gefiltert[gefiltert[spalte].isna()]
             else:
                 if spalte == "dgf_untervers":
                     gefiltert[spalte] = pd.to_numeric(gefiltert[spalte], errors='coerce')
@@ -274,7 +329,7 @@ def adressen_auswerten(data, statusdatei):
         basis_wert = wert_hgf + wert_dgf
         return basis_wert
 
-    def adressen_detail(gemeinde, gemarkung, eaktz, df):
+    def adressen_detail(gemeinde, gemarkung, eaktz, bc_code, df):
 
         STATUS_WECHSEL_PT_NEU = ['In Bearbeitung FM', 'In Bearbeitung PT','Angenommen', 'Abgelehnt']
         AENDERUNG_PT = ['Entnahme -> EWA',
@@ -296,6 +351,7 @@ def adressen_auswerten(data, statusdatei):
                 fixe_kriterien = {
                     "gemark_nam": gemarkung,
                     "foerderazbnd": eaktz,
+                    "bauabschnitt_code": bc_code,
                     "status_wechsel_pt_neu": status_wechsel_pt_neu,
                     "aenderung_pt": aenderung_pt,
                 }
@@ -308,19 +364,22 @@ def adressen_auswerten(data, statusdatei):
                         gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte].astype(str).str.strip() != "")]
                     elif wert == "LEER":
                         gefiltert = gefiltert[gefiltert[spalte].isna() | (gefiltert[spalte].astype(str).str.strip() == "")]
+                    elif wert == "":
+                        gefiltert = gefiltert[gefiltert[spalte].isna()]
                     else:
                         gefiltert = gefiltert[gefiltert[spalte] == wert]
                 result.append((status_wechsel_pt_neu, aenderung_pt, len(gefiltert)))
 
         return result
 
-    def adressen_aktuell(gemeinde, gemarkung, eaktz, df):
+    def adressen_aktuell(gemeinde, gemarkung, eaktz, bc_code, df):
 
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
             "gemark_nam": gemarkung,
             "status_wechsel_pt": "LEER",
             "foerderazbnd": eaktz,
+            "bauabschnitt_code": bc_code,
         }
 
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
@@ -331,6 +390,8 @@ def adressen_auswerten(data, statusdatei):
                 gefiltert = gefiltert[gefiltert[spalte].notna() & (gefiltert[spalte].astype(str).str.strip() != "")]
             elif wert == "LEER":
                 gefiltert = gefiltert[gefiltert[spalte].isna() | (gefiltert[spalte].astype(str).str.strip() == "")]
+            elif wert == "":
+                gefiltert = gefiltert[gefiltert[spalte].isna()]
             else:
                 gefiltert = gefiltert[gefiltert[spalte] == wert]
 
@@ -355,14 +416,14 @@ def adressen_auswerten(data, statusdatei):
 
     if data['Prod'] == "j":
         address_master = [home + "/" + data["oew_ablage_adressen"] + data["ADK_ADRESS_MASTER"],
-                          home + "/" + data["oew_ablage_adressen"] + data["LBC_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["BC_ADRESS_MASTER"],
                           home + "/" + data["oew_ablage_adressen"] + data["FDS_ADRESS_MASTER"],
-                          home + "/" + data["oew_ablage_adressen"] + data["LRT_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["REU_ADRESS_MASTER"],
                           home + "/" + data["oew_ablage_adressen"] + data["SIG_ADRESS_MASTER"],
                           home + "/" + data["oew_ablage_adressen"] + data["ZAK_ADRESS_MASTER"]
                           ]
     else:
-        address_master = [home + "/" + data["input_dir"] + data["ADK_ADRESS_MASTER_TEST"]]
+        address_master = [home + "/" + data["input_dir"] + data["ADRESS_MASTER_TEST"]]
         # address_master = [home + "/" + data["oew_ablage_adressen"] + data["LBC_ADRESS_MASTER"]]
         # address_master = [home + "/" + data["oew_ablage_adressen"] + data["FDS_ADRESS_MASTER"]]
 
@@ -373,12 +434,12 @@ def adressen_auswerten(data, statusdatei):
         # Ermitteln welcher Landkreis gerade ausgewertet wird um die Suche darauf einzuschränken
         if quell_datei == home + "/" + data["oew_ablage_adressen"] + data["ADK_ADRESS_MASTER"]:
             lk = "ADK"
-        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["LBC_ADRESS_MASTER"]:
-            lk = "LBC"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["BC_ADRESS_MASTER"]:
+            lk = "BC"
         elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["FDS_ADRESS_MASTER"]:
             lk = "FDS"
-        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["LRT_ADRESS_MASTER"]:
-            lk = "LRT"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["REU_ADRESS_MASTER"]:
+            lk = "REU"
         elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["SIG_ADRESS_MASTER"]:
             lk = "SIG"
         elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["ZAK_ADRESS_MASTER"]:
@@ -393,6 +454,7 @@ def adressen_auswerten(data, statusdatei):
             gemarkung = (ws_master.cell(row=row_idx, column=4).value or "").rstrip()
             eaktz = (ws_master.cell(row=row_idx, column=1).value or "").rstrip()
             landkreis = (ws_master.cell(row=row_idx, column=2).value or "").rstrip()
+            bc_code = (ws_master.cell(row=row_idx, column=8).value or "").rstrip()
 
             if landkreis and landkreis.startswith(lk):
                 if gemeinde is None or str(gemeinde).strip() == "":
@@ -401,11 +463,10 @@ def adressen_auswerten(data, statusdatei):
                 datum = datetime.today().strftime("%Y%m%d %H%M%S")
                 print(datum + ": Auswertung Gemeinde/Gemarkung: /" + str(gemeinde) + "/" + str(gemarkung) +"/")
 
-                anzahl_basis_value = adressen_basis_treffer(gemeinde, gemarkung, eaktz, df)
-                anzahl_details = adressen_detail(gemeinde, gemarkung, eaktz, df)
-                #anzahl_entfernen_value = adressen_detail(gemeinde, gemarkung, eaktz, "Aus Antrag entfernen", df)
-                #anzahl_in_bearbeitung_value = adressen_detail(gemeinde, gemarkung, eaktz, "in Bearbeitung", df)
-                anzahl_aktuell_value = adressen_aktuell(gemeinde, gemarkung, eaktz, df)
+                anzahl_gesamt = adressen_gesamt(gemeinde, gemarkung, eaktz, bc_code, df)
+                anzahl_basis_value = adressen_basis_treffer(gemeinde, gemarkung, eaktz, bc_code, df)
+                anzahl_details = adressen_detail(gemeinde, gemarkung, eaktz, bc_code, df)
+                anzahl_aktuell_value = adressen_aktuell(gemeinde, gemarkung, eaktz, bc_code, df)
 
 
                 details_schreiben(ws_details, row_idx, eaktz, gemeinde, gemarkung, anzahl_details)
@@ -433,6 +494,9 @@ def adressen_auswerten(data, statusdatei):
                 anzahl_abgelehnt = sum(anzahl for status_wechsel_pt_neu, aenderung_pt, anzahl in anzahl_details
                                                if status_wechsel_pt_neu == "Abgelehnt")
 
+                if anzahl_gesamt != 0:
+                    ws_master.cell(row=row_idx, column=ADRESSEN_GESAMT_COL, value=anzahl_gesamt)
+
                 if anzahl_basis_value != 0:
                     ws_master.cell(row=row_idx, column=ADRESSEN_BASIS_COL, value=anzahl_basis_value)
 
@@ -457,8 +521,16 @@ def adressen_auswerten(data, statusdatei):
                 if anzahl_aktuell_value != 0:
                     ws_master.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=anzahl_aktuell_value)
 
+                # Logik für Ermittlung Baubeginn
+                ws_master.cell(row=row_idx, column=ADRESSEN_Y_COL, value=2)
 
-    for row_idx in range(START_ROW, ws_master.max_row):
+                anteil_bearbeitung = (anzahl_in_bearbeitung_fm + anzahl_in_bearbeitung_pt) / anzahl_basis_value
+                ws_master.cell(row=row_idx, column=ADRESSEN_X_COL, value=anteil_bearbeitung)
+
+
+    for row_idx in range(START_ROW, ws_master.max_row + 1):
+        if ws_master.cell(row=row_idx, column=ADRESSEN_GESAMT_COL).value is None:
+            ws_master.cell(row=row_idx, column=ADRESSEN_GESAMT_COL, value=0)
         if ws_master.cell(row=row_idx, column=ADRESSEN_BASIS_COL).value is None:
             ws_master.cell(row=row_idx, column=ADRESSEN_BASIS_COL, value=0)
         if ws_master.cell(row=row_idx, column=ADRESSEN_ENTNAHME).value is None:
@@ -476,10 +548,12 @@ def adressen_auswerten(data, statusdatei):
         if ws_master.cell(row=row_idx, column=ADRESSEN_AKTUELL).value is None:
             ws_master.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=0)
 
-    wb.save(STATUS_DATEI)
+    ausgabe = home + "/" + data['output_dir'] + f"AP24_Master_Status_{datum}_V3.xlsx"
+    wb.save(ausgabe)
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Adressmaster-Daten verarbeitet")
 
 
 if __name__ == '__main__':
-    main()
+    prod = sys.argv[1]
+    main(prod)

@@ -12,8 +12,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 home = os.path.expanduser('~')
 
-def main():
 
+def main():
     #home = os.path.expanduser('~')
 
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
@@ -36,19 +36,19 @@ def main():
     #eAkz_dictionary = {eintrag["aktenzeichen"]: eintrag for eintrag in eAkz["eintraege"]}
 
     # Aufruf Projektmasterdatei einzulesen und auszuwerten
-    alle_ergebnisse = projektmaster_einlesen(input_dir, data)
+    alle_ergebnisse = projektmaster_einlesen(data)
 
     # Ergebnisse in die Statusdatei schreiben
     statusdatei = status_excel_erstellen(data, alle_ergebnisse)
 
-    adressen_auswerten(input_dir, data, statusdatei)
+    #adressen_auswerten(data, statusdatei)
 
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Ende der Verarbeitung")
 
-def projektmaster_einlesen(inputdir, data):
 
-    pm_datei = Path(inputdir + data['pmd_datei'])
+def projektmaster_einlesen(data):
+    pm_datei = Path( home + "/" + data["oew_ablage_pmd"] + data['pmd_datei'])
 
     alle_ergebnisse = []
 
@@ -114,6 +114,9 @@ def projektmaster_details(df, alle_ergebnisse):
         if pd.isna(wert_a) or str(wert_a).strip() == "":
             continue
 
+        if pd.notna(row["eAZ"]) and not str(row["eAZ"]).startswith("832."):
+            continue
+
         # In String umwandeln
         wert_a = str(wert_a).strip()
 
@@ -150,7 +153,7 @@ def status_excel_erstellen(data, alle_ergebnisse):
     gesamt_df = df.drop_duplicates(subset=['eAktenzeichen', 'Gemeinde', 'Gemarkung'])
 
     # Sortieren der DAten nach Landkreis, Ausschreibung, Gemeinde und Gemarkung
-    gesamt_df = gesamt_df.sort_values(by=['Landkreis','Ausschreibung' ,'Gemeinde', 'Gemarkung'])
+    gesamt_df = gesamt_df.sort_values(by=['Landkreis', 'Ausschreibung', 'Gemeinde', 'Gemarkung'])
 
     template = home + "/" + data['output_dir'] + data['status_template']  #Status_Template
     sheet = "Master"
@@ -191,7 +194,8 @@ def status_excel_erstellen(data, alle_ergebnisse):
     end_row = START_ROW + len(gesamt_df) - 1
 
     for row_idx in range(START_ROW, end_row + 1):
-        ws.cell(row=row_idx, column=6, value=f'=VLOOKUP(B{row_idx},Daten!Z$1:AA$57,2,)') # Formel muss in Englisch angegeben werden
+        ws.cell(row=row_idx, column=6,
+                value=f'=VLOOKUP(B{row_idx},Daten!Z$1:AA$57,2,)')  # Formel muss in Englisch angegeben werden
 
     wb.save(ausgabe)
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
@@ -200,10 +204,10 @@ def status_excel_erstellen(data, alle_ergebnisse):
     return ausgabe
 
 
-def adressen_auswerten(input_dir, data, statusdatei):
-    STATUS_DATEI = statusdatei # gefüllte "AP24_Master_Status..."
+def adressen_auswerten(data, statusdatei):
+    STATUS_DATEI = statusdatei  # gefüllte "AP24_Master_Status..."
     STATUS_SHEET = "Master"
-    QUELL_SHEET = "Adressliste_zur Bearbeitung_int" #Excelsheet, welches ausgewertet wird
+    QUELL_SHEET = "Adressliste_zur Bearbeitung_int"  #Excelsheet, welches ausgewertet wird
     START_ROW = 5
 
     ADRESSEN_BASIS_COL = 15
@@ -212,7 +216,7 @@ def adressen_auswerten(input_dir, data, statusdatei):
     ADRESSEN_IN_BEARBEITUNG = 18
     ADRESSEN_AKTUELL = 19
 
-    GU = 11 # Spalte K - Hier kommt der GÜ/GU rein
+    GU = 11  # Spalte K - Hier kommt der GÜ/GU rein
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Start Auswertung der Adressdaten je Landkreis")
 
@@ -223,7 +227,7 @@ def adressen_auswerten(input_dir, data, statusdatei):
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
             "gemark_nam": gemarkung,
-            "hgf_aktenzeichnen_quelle" : eaktz,
+            "hgf_aktenzeichnen_quelle": eaktz,
             "hgf_untervers": 1,
         }
         """Filtert den DataFrame nach allen Kriterien und gibt die Anzahl zurück."""
@@ -238,7 +242,7 @@ def adressen_auswerten(input_dir, data, statusdatei):
                 gefiltert = gefiltert[gefiltert[spalte] == wert]
         wert_hgf = len(gefiltert)
 
-        #if gemarkung == "Berghülen":
+        #if gemarkung == "Dietenheim ":
         #    print('Hallo')
 
         fixe_kriterien = {
@@ -262,7 +266,7 @@ def adressen_auswerten(input_dir, data, statusdatei):
         basis_wert = wert_hgf + wert_dgf
         return basis_wert
 
-    def adressen_hinzunahme(gemeinde, gemarkung, eaktz,  df):
+    def adressen_hinzunahme(gemeinde, gemarkung, eaktz, df):
 
         # Fixe Kriterien definieren – Spaltenname (aus Header) und gewünschter Wert
         fixe_kriterien = {
@@ -275,7 +279,7 @@ def adressen_auswerten(input_dir, data, statusdatei):
         gefiltert = df[df[SUCH_SPALTE_QUELLE] == gemeinde]
 
         for spalte, wert in fixe_kriterien.items():
-           gefiltert = gefiltert[gefiltert[spalte] == wert]
+            gefiltert = gefiltert[gefiltert[spalte] == wert]
 
         return len(gefiltert)
 
@@ -340,29 +344,40 @@ def adressen_auswerten(input_dir, data, statusdatei):
 
         return len(gefiltert)
 
-
     # Basis-Excel laden
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Statusdatei: " + STATUS_DATEI + " wird geladen")
     wb = load_workbook(STATUS_DATEI)
     ws = wb[STATUS_SHEET]
     if data['Prod'] == "j":
-        address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["ADK_ADRESS_MASTER"],
-                          home + "/" + data["input_dir"] + data["adressablage"] + data["LBC_ADRESS_MASTER"],
-                          home + "/" + data["input_dir"] + data["adressablage"] + data["FDS_ADRESS_MASTER"],
-                          home + "/" + data["input_dir"] + data["adressablage"] + data["LRT_ADRESS_MASTER"],
-                          home + "/" + data["input_dir"] + data["adressablage"] + data["SIG_ADRESS_MASTER"],
-                          home + "/" + data["input_dir"] + data["adressablage"] + data["ZAK_ADRESS_MASTER"]
+        address_master = [home + "/" + data["oew_ablage_adressen"] + data["ADK_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["LBC_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["FDS_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["LRT_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["SIG_ADRESS_MASTER"],
+                          home + "/" + data["oew_ablage_adressen"] + data["ZAK_ADRESS_MASTER"]
                           ]
     else:
-        address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["ADK_ADRESS_MASTER"]]
-        #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["LBC_ADRESS_MASTER"]]
-        #address_master = [home + "/" + data["input_dir"] + data["adressablage"] + data["FDS_ADRESS_MASTER"]]
-
+        address_master = [home + "/" + data["oew_ablage_adressen"] + data["ADK_ADRESS_MASTER"]]
+        #address_master = [home + "/" + data["oew_ablage_adressen"] + data["LBC_ADRESS_MASTER"]]
+        #address_master = [home + "/" + data["oew_ablage_adressen"] + data["FDS_ADRESS_MASTER"]]
 
     for quell_datei in address_master:
         datum = datetime.today().strftime("%Y%m%d %H%M%S")
         print(datum + ": Adressdatei: " + quell_datei + " gestartet")
+
+        if quell_datei == home + "/" + data["oew_ablage_adressen"] + data["ADK_ADRESS_MASTER"]:
+            lk = "ADK"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["LBC_ADRESS_MASTER"]:
+            lk = "LBC"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["FDS_ADRESS_MASTER"]:
+            lk = "FDS"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["LRT_ADRESS_MASTER"]:
+            lk = "LRT"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["SIG_ADRESS_MASTER"]:
+            lk = "SIG"
+        elif quell_datei == home + "/" + data["oew_ablage_adressen"] + data["ZAK_ADRESS_MASTER"]:
+            lk = "ZAK"
 
         df = pd.read_excel(quell_datei, sheet_name=QUELL_SHEET, header=14)
 
@@ -370,26 +385,31 @@ def adressen_auswerten(input_dir, data, statusdatei):
             gemeinde = ws.cell(row=row_idx, column=4).value
             gemarkung = ws.cell(row=row_idx, column=5).value
             eaktz = ws.cell(row=row_idx, column=2).value
+            landkreis = ws.cell(row=row_idx, column=3).value
 
-            if gemeinde is None or str(gemeinde).strip() == "":
-                continue
+            if landkreis and landkreis.startswith(lk):
+                if gemeinde is None or str(gemeinde).strip() == "":
+                    continue
 
-            anzahl_basis_value = adressen_basis_treffer(gemeinde, gemarkung, eaktz, df)
-            anzahl_hinzunahme_value = adressen_hinzunahme(gemeinde, gemarkung, eaktz, df)
-            anzahl_entfernen_value = adressen_entfernen(gemeinde, gemarkung,  eaktz, df)
-            anzahl_in_bearbeitung_value = adressen_in_bearbeitung(gemeinde, gemarkung,  eaktz, df)
-            anzahl_aktuell_value = adressen_aktuell(gemeinde, gemarkung, eaktz, df)
+                datum = datetime.today().strftime("%Y%m%d %H%M%S")
+                print(datum + ": Auswertung Gemeinde : " + str(gemeinde))
 
-            if anzahl_basis_value != 0:
-                ws.cell(row=row_idx, column=ADRESSEN_BASIS_COL, value=anzahl_basis_value)
-            if anzahl_hinzunahme_value != 0:
-                ws.cell(row=row_idx, column=ADRESSEN_HINZUNAHME_COL, value=anzahl_hinzunahme_value)
-            if anzahl_entfernen_value != 0:
-                ws.cell(row=row_idx, column=ADRESSEN_ENTFERNEN_COL, value=anzahl_entfernen_value)
-            if anzahl_in_bearbeitung_value != 0:
-                ws.cell(row=row_idx, column=ADRESSEN_IN_BEARBEITUNG, value=anzahl_in_bearbeitung_value)
-            if anzahl_aktuell_value != 0:
-                ws.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=anzahl_aktuell_value)
+                anzahl_basis_value = adressen_basis_treffer(gemeinde, gemarkung, eaktz, df)
+                anzahl_hinzunahme_value = adressen_hinzunahme(gemeinde, gemarkung, eaktz, df)
+                anzahl_entfernen_value = adressen_entfernen(gemeinde, gemarkung, eaktz, df)
+                anzahl_in_bearbeitung_value = adressen_in_bearbeitung(gemeinde, gemarkung, eaktz, df)
+                anzahl_aktuell_value = adressen_aktuell(gemeinde, gemarkung, eaktz, df)
+
+                if anzahl_basis_value != 0:
+                    ws.cell(row=row_idx, column=ADRESSEN_BASIS_COL, value=anzahl_basis_value)
+                if anzahl_hinzunahme_value != 0:
+                    ws.cell(row=row_idx, column=ADRESSEN_HINZUNAHME_COL, value=anzahl_hinzunahme_value)
+                if anzahl_entfernen_value != 0:
+                    ws.cell(row=row_idx, column=ADRESSEN_ENTFERNEN_COL, value=anzahl_entfernen_value)
+                if anzahl_in_bearbeitung_value != 0:
+                    ws.cell(row=row_idx, column=ADRESSEN_IN_BEARBEITUNG, value=anzahl_in_bearbeitung_value)
+                if anzahl_aktuell_value != 0:
+                    ws.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=anzahl_aktuell_value)
 
     for row_idx in range(START_ROW, ws.max_row + 1):
         if ws.cell(row=row_idx, column=ADRESSEN_BASIS_COL).value is None:
