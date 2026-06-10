@@ -254,19 +254,19 @@ def basis_excel_erstellen(data, alle_projekte, df_pmd):
 def pmd_einlesen(data):
 
     if data['Prod'] == "j":
-        pm_datei = Path(home + "/" + data["input_dir"] + data['pmd_datei_test'])
-        #pm_datei = Path(home + "/" + data["oew_ablage_pmd"] + data['pmd_datei'])
+        #pm_datei = Path(home + "/" + data["input_dir"] + data['pmd_datei_test'])
+        pm_datei = Path(home + "/" + data["oew_ablage_pmd"] + data['pmd_datei'])
     else:
         pm_datei = Path(home + "/" + data["input_dir"] + data['pmd_datei_test'])
 
 
     sheet_namen = [
-        "ADK",
-        "BC",
-        "RT",
-        "FDS",
-        "SIG",
-        "ZAK"
+        "Planungs und Bauabrufe ADK",
+        "Planungs und Bauabrufe LBC _neu",
+        "Planungs und Bauabrufe LRT",
+        "Planungs und Bauabrufe FDS",
+        "Planungs und Bauabrufe SIG",
+        "Planungs und Bauabrufe ZAK"
     ]
 
     sheets = pd.read_excel(

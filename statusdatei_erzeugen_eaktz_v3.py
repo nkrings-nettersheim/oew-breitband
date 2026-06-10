@@ -8,7 +8,8 @@ import warnings
 from openpyxl import load_workbook
 from openpyxl.styles import numbers
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
+
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -407,6 +408,28 @@ def adressen_auswerten(data, statusdatei):
             ws_details.cell(row=row_idx, column=x, value=anzahl)
             x= x+1
 
+    def skaliere_wert(x):
+        # Bereich 3: Werte von 0 bis -1000 (wird auf 3 bis 3.99 skaliert)
+        if -1000 <= x <= 0:
+            # x = 0 ergibt 3.0; x = -1000 ergibt 3.99
+            return 3.0 + (abs(x) / 1000.0) * 0.99
+
+        # Bereich 2: Werte von 1 bis 90 (wird auf 2 bis 2.99 skaliert)
+        elif 1 <= x <= 90:
+            # x = 90 ergibt 2.0; x = 1 ergibt ~2.99
+            return 2.0 + ((90 - x) / 89.0) * 0.99
+
+        # Bereich 1: Werte von 91 bis 1000 (wird auf 1 bis 1.99 skaliert)
+        elif 91 <= x <= 1000:
+            # x = 91 ergibt 1.0; x = 1000 ergibt 1.99
+            return 1.0 + ((x - 91) / 909.0) * 0.99
+
+        # Fallbacks für Werte außerhalb des definierten Spektrums (-1000 bis 1000)
+        elif x < -1000:
+            return 3.99
+        else:
+            return 1.99
+
     # Basis-Excel laden
     datum = datetime.today().strftime("%Y%m%d %H%M%S")
     print(datum + ": Statusdatei: " + STATUS_DATEI + " wird geladen")
@@ -522,7 +545,35 @@ def adressen_auswerten(data, statusdatei):
                     ws_master.cell(row=row_idx, column=ADRESSEN_AKTUELL, value=anzahl_aktuell_value)
 
                 # Logik für Ermittlung Baubeginn
-                ws_master.cell(row=row_idx, column=ADRESSEN_Y_COL, value=2)
+                baubeginn = ws_master.cell(row=row_idx, column=11).value
+                tage = None
+
+                if isinstance(baubeginn, datetime):
+                    tage = (baubeginn - datetime.today()).days
+                elif isinstance(baubeginn, date):
+                    tage = (baubeginn - date.today()).days
+                elif isinstance(baubeginn, str) and baubeginn.strip():
+                    # falls Datum als String vorliegt (z.B. "2024-01-15")
+                    try:
+                        dt = datetime.strptime(baubeginn.strip(), "%Y-%m-%d")
+                        tage = (dt - datetime.today()).days
+                    except ValueError:
+                        tage = None  # kein gültiges Datum
+
+                #print(tage)
+                wert = 0
+
+                if tage is not None:
+                    wert = skaliere_wert(tage)
+
+                #    if tage > 90:
+                #        wert = 1
+                #    elif tage <= 90:
+                #        wert = 2
+                #    else:
+                #        wert = 3
+
+                ws_master.cell(row=row_idx, column=ADRESSEN_Y_COL, value=wert)
 
                 anteil_bearbeitung = (anzahl_in_bearbeitung_fm + anzahl_in_bearbeitung_pt) / anzahl_basis_value
                 ws_master.cell(row=row_idx, column=ADRESSEN_X_COL, value=anteil_bearbeitung)
